@@ -80,7 +80,7 @@ class VoltageSource(object):
         self.voltage = voltage
         self.net1 = net1
         self.net2 = net2
-        self._fake_current_var = Net('_fake_current_var')
+        self._fake_current_var = Variable('_fake_current_var')
     def current(self, res):
         return res[self._fake_current_var]
     def get_current_contributions(self, frequency):
