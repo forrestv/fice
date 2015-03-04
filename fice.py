@@ -167,5 +167,5 @@ if __name__ == '__main__':
     res = do_nodal(objs)
     for i in xrange(H):
         for j in xrange(W):
-            print '%.02f' % (res[nets[i, j]].real,),
+            print '%.02f' % (res[nets[i, j].voltage].real,),
         print
