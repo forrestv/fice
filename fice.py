@@ -37,8 +37,6 @@ class Impedor(object):
             self.net1.voltage: ({self.net1.voltage: -1/Z, self.net2.voltage: +1/Z}, 0),
             self.net2.voltage: ({self.net2.voltage: -1/Z, self.net1.voltage: +1/Z}, 0),
         }
-    def get_other_constraints(self):
-        return []
 
 class Resistor(Impedor):
     def __init__(self, resistance, net1, net2):
