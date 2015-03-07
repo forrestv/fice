@@ -9,16 +9,16 @@ v3 = fice.Net('v3')
 gnd = fice.Net('gnd')
 
 objs = [
-    fice.VoltageSource(lambda f: 1, gnd, v1),
+    fice.VoltageSource(lambda w: 1, gnd, v1),
     fice.Resistor(0, v1, v2),
-    fice.TransmissionLine(50, 0, 0.2, v2, gnd, v22),
-    fice.TransmissionLine(50, 0, 0.3, v22, gnd, v3),
+    fice.TransmissionLine(50, lambda w: 0, 0.2, v2, gnd, v22),
+    fice.TransmissionLine(50, lambda w: 0, 0.3, v22, gnd, v3),
     fice.Resistor(50, v3, gnd),
-    #fice.VoltageSource(0, gnd, v3),
+    #fice.VoltageSource(lambda w: 0, gnd, v3),
     fice.Ground(gnd),
 ]
 
-res = fice.do_nodal(objs, frequency=1*2*math.pi)
+res = fice.do_nodal(objs, w=1*2*math.pi)
 
 print res[gnd.voltage]
 print res[v1.voltage]

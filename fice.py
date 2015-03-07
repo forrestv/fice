@@ -20,9 +20,9 @@ class Net(object):
 class Impedor(object):
     def __init__(self):
         self._current_when_short = Variable((self, '_current_when_short'))
-    def get_current_contributions(self, frequency):
+    def get_current_contributions(self, w):
         # return list of (destination node, {net voltage coefficients}, constant)
-        Z = self.get_impedance(frequency)
+        Z = self.get_impedance(w)
         if Z == 0:
             return {
                 self.net2.voltage: ({self._current_when_short: 1}, 0),
@@ -44,7 +44,7 @@ class Resistor(Impedor):
         self.resistance = resistance
         self.net1 = net1
         self.net2 = net2
-    def get_impedance(self, frequency): return self.resistance
+    def get_impedance(self, w): return self.resistance
 
 class Capacitor(Impedor):
     def __init__(self, capacitance, net1, net2):
@@ -52,7 +52,7 @@ class Capacitor(Impedor):
         self.capacitance = capacitance
         self.net1 = net1
         self.net2 = net2
-    def get_impedance(self, frequency): return 1/(1j * frequency * self.capacitance) if frequency else None
+    def get_impedance(self, w): return 1/(1j * w * self.capacitance) if w else None
 
 class Inductor(Impedor):
     def __init__(self, inductance, net1, net2):
@@ -60,7 +60,7 @@ class Inductor(Impedor):
         self.inductance = inductance
         self.net1 = net1
         self.net2 = net2
-    def get_impedance(self, frequency): return 1j * frequency * self.inductance
+    def get_impedance(self, w): return 1j * w * self.inductance
 
 class CurrentSource(object):
     def __init__(self, current, net1, net2):
@@ -69,9 +69,9 @@ class CurrentSource(object):
         self.net2 = net2
     def voltage(self, res):
         return res[self.net2.voltage] - res[self.net1.voltage]
-    def get_current_contributions(self, frequency):
+    def get_current_contributions(self, w):
         # return list of (destination node, {net voltage coefficients}, constant)
-        c = self.current(frequency)
+        c = self.current(w)
         return {
             self.net1.voltage: ({}, -c),
             self.net2.voltage: ({}, c),
@@ -85,11 +85,11 @@ class VoltageSource(object):
         self._fake_current_var = Variable('_fake_current_var')
     def current(self, res):
         return res[self._fake_current_var]
-    def get_current_contributions(self, frequency):
+    def get_current_contributions(self, w):
         return {
             self.net2.voltage: ({self._fake_current_var: 1}, 0),
             self.net1.voltage: ({self._fake_current_var: -1}, 0),
-            self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, -self.voltage(frequency)),
+            self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, -self.voltage(w)),
         }
 
 class TransmissionLine(object):
@@ -102,8 +102,8 @@ class TransmissionLine(object):
         self._Z_0 = characteristic_impedance
         self._attenuation_per_second = attenuation_per_second
         self._length_in_seconds = length_in_seconds
-    def get_current_contributions(self, frequency):
-        k = math.exp(-self._attenuation_per_second(frequency) * self._length_in_seconds) * cmath.exp(-1j*frequency*self._length_in_seconds)
+    def get_current_contributions(self, w):
+        k = math.exp(-self._attenuation_per_second(w) * self._length_in_seconds) * cmath.exp(-1j*w*self._length_in_seconds)
         return {
             self.net1.voltage: ({self._wavel_var: 2/self._Z_0, self.net1.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
             self.net2.voltage: ({self._waver_var: 2/self._Z_0, self.net2.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
@@ -116,7 +116,7 @@ class Ground(object):
     # a 1 ohm resistor to 0 volt reference
     # DO NOT USE MULTIPLE IN ONE CIRCUIT
     def __init__(self, net): self.net = net
-    def get_current_contributions(self, frequency):
+    def get_current_contributions(self, w):
         return {
             self.net.voltage: ({self.net.voltage: -1}, 0),
         }
@@ -127,11 +127,11 @@ def add_dicts(a, b, add_func=lambda a, b: a + b):
         res[k] = add_func(res[k], v) if k in res else v
     return res
 
-def do_nodal(objects, frequency=0):
+def do_nodal(objects, w=0):
     equations = {}
     var_list = set()
     for obj in objects:
-        for dest, (coeff, const) in obj.get_current_contributions(frequency).iteritems():
+        for dest, (coeff, const) in obj.get_current_contributions(w).iteritems():
             x = equations.get(dest, ({}, 0))
             equations[dest] = add_dicts(x[0], coeff), x[1] + const
     
@@ -186,7 +186,7 @@ if __name__ == '__main__':
         for j in xrange(W-1):
             objs.append(Resistor(1, nets[i, j], nets[i, j+1]))
     objs.append(Ground(nets[0, 0]))
-    objs.append(VoltageSource(1, nets[0, 0], nets[H-1, W-1]))
+    objs.append(VoltageSource(lambda w: 1, nets[0, 0], nets[H-1, W-1]))
     res = do_nodal(objs)
     for i in xrange(H):
         for j in xrange(W):
