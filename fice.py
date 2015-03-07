@@ -1,6 +1,7 @@
 from __future__ import division
 
 import math
+import cmath
 import numpy
 
 class Variable(object):
@@ -70,9 +71,10 @@ class CurrentSource(object):
         return res[self.net2.voltage] - res[self.net1.voltage]
     def get_current_contributions(self, frequency):
         # return list of (destination node, {net voltage coefficients}, constant)
+        c = self.current(frequency)
         return {
-            self.net1.voltage: ({}, -self.current),
-            self.net2.voltage: ({}, self.current),
+            self.net1.voltage: ({}, -c),
+            self.net2.voltage: ({}, c),
         }
 
 class VoltageSource(object):
@@ -87,11 +89,32 @@ class VoltageSource(object):
         return {
             self.net2.voltage: ({self._fake_current_var: 1}, 0),
             self.net1.voltage: ({self._fake_current_var: -1}, 0),
-            self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, -self.voltage),
+            self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, -self.voltage(frequency)),
+        }
+
+class TransmissionLine(object):
+    def __init__(self, characteristic_impedance, attenuation_per_second, length_in_seconds, net1, gnd, net2):
+        self.net1 = net1
+        self.gnd = gnd
+        self.net2 = net2
+        self._waver_var = Variable('_wave1_var')
+        self._wavel_var = Variable('_wave2_var')
+        self._Z_0 = characteristic_impedance
+        self._attenuation_per_second = attenuation_per_second
+        self._length_in_seconds = length_in_seconds
+    def get_current_contributions(self, frequency):
+        k = math.exp(-self._attenuation_per_second(frequency) * self._length_in_seconds) * cmath.exp(-1j*frequency*self._length_in_seconds)
+        return {
+            self.net1.voltage: ({self._wavel_var: 2/self._Z_0, self.net1.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
+            self.net2.voltage: ({self._waver_var: 2/self._Z_0, self.net2.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
+            self.gnd.voltage: ({self._wavel_var: -2/self._Z_0, self._waver_var: -2/self._Z_0, self.net1.voltage: 1/self._Z_0, self.net2.voltage: 1/self._Z_0, self.gnd.voltage: -2/self._Z_0}, 0),
+            self._waver_var: ({self._waver_var: -1, self.net1.voltage: k, self.gnd.voltage: -k, self._wavel_var: -k}, 0),
+            self._wavel_var: ({self._wavel_var: -1, self.net2.voltage: k, self.gnd.voltage: -k, self._waver_var: -k}, 0),
         }
 
 class Ground(object):
     # a 1 ohm resistor to 0 volt reference
+    # DO NOT USE MULTIPLE IN ONE CIRCUIT
     def __init__(self, net): self.net = net
     def get_current_contributions(self, frequency):
         return {
@@ -104,11 +127,11 @@ def add_dicts(a, b, add_func=lambda a, b: a + b):
         res[k] = add_func(res[k], v) if k in res else v
     return res
 
-def do_nodal(objects, freq=0):
+def do_nodal(objects, frequency=0):
     equations = {}
     var_list = set()
     for obj in objects:
-        for dest, (coeff, const) in obj.get_current_contributions(freq).iteritems():
+        for dest, (coeff, const) in obj.get_current_contributions(frequency).iteritems():
             x = equations.get(dest, ({}, 0))
             equations[dest] = add_dicts(x[0], coeff), x[1] + const
     
