@@ -1,8 +1,10 @@
 from __future__ import division
 
-import math
 import cmath
+import math
+
 import numpy
+
 
 class Variable(object):
     def __init__(self, name):
@@ -146,49 +148,3 @@ def do_nodal(objects, w=0):
     x = numpy.linalg.solve(A, b)
     
     return dict(zip(net_list, map(lambda a: complex(a.real, a.imag), x)))
-
-'''v1 = Net('v1')
-v2 = Net('v2')
-gnd = Net('gnd')
-res = do_nodal([
-    Ground(gnd),
-    VoltageSource(1, gnd, v1),
-    Resistor(10, v1, v2),
-    Capacitor(10, v2, gnd),
-], 10)
-for net, v in res.iteritems():
-    print net.name, v'''
-
-if 0:
-    def f(x):
-        v1 = Net('v1')
-        v2 = Net('v2')
-        gnd = Net('gnd')
-        res = do_nodal([
-            Ground(gnd),
-            VoltageSource(1, gnd, v1),
-            Resistor(10, v1, v2),
-            Capacitor(.002, v2, gnd),
-        ], x)
-        return abs(res[v2])
-    for x in xrange(100):
-        xx = 2**(x/12)
-        print str(xx).rjust(30), 20*math.log10(f(xx))
-
-if __name__ == '__main__':
-    H, W = 2, 5
-    nets = {(i, j): Net('%s,%s' % (i, j)) for i in xrange(H) for j in xrange(W)}
-    objs = []
-    for i in xrange(H-1):
-        for j in xrange(W):
-            objs.append(Resistor(1, nets[i, j], nets[i+1, j]))
-    for i in xrange(H):
-        for j in xrange(W-1):
-            objs.append(Resistor(1, nets[i, j], nets[i, j+1]))
-    objs.append(Ground(nets[0, 0]))
-    objs.append(VoltageSource(lambda w: 1, nets[0, 0], nets[H-1, W-1]))
-    res = do_nodal(objs)
-    for i in xrange(H):
-        for j in xrange(W):
-            print '%.02f' % (res[nets[i, j].voltage].real,),
-        print

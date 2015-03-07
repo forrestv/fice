@@ -1,6 +1,9 @@
+from __future__ import division
+
 import math
 
 import fice
+
 
 v1 = fice.Net('v1')
 v2 = fice.Net('v2')
