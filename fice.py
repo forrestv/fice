@@ -24,6 +24,7 @@ class Impedor(object):
         self._current_when_short = Variable((self, '_current_when_short'))
     def get_current_contributions(self, w):
         # return list of (destination node, {net voltage coefficients}, constant)
+        # convention is to return currents going into the node
         Z = self.get_impedance(w)
         if Z == 0:
             return {
@@ -63,6 +64,7 @@ class Inductor(Impedor):
     def get_impedance(self, w): return 1j * w * self.inductance
 
 class CurrentSource(object):
+    # current source from net1 to net2
     def __init__(self, current, net1, net2):
         self.current = current
         self.net1 = net1
@@ -77,7 +79,23 @@ class CurrentSource(object):
             self.net2.voltage: ({}, c),
         }
 
+class VoltageControlledCurrentSource(object):
+    # generates current from net1 to net2 equal to gain * (V(sense1) - V(sense2))
+    def __init__(self, gain, net1, net2, sense1, sense2):
+        self.gain = gain
+        self.net1 = net1
+        self.net2 = net2
+        self.sense1 = sense1
+        self.sense2 = sense2
+    def get_current_contributions(self, w):
+        # return list of (destination node, {net voltage coefficients}, constant)
+        return {
+            self.net1.voltage: ({self.sense1.voltage: -self.gain, self.sense2.voltage: self.gain}, 0),
+            self.net2.voltage: ({self.sense1.voltage: self.gain, self.sense2.voltage: -self.gain}, 0),
+        }
+
 class VoltageSource(object):
+    # makes V(net2) - V(net1) = voltage
     def __init__(self, voltage, net1, net2):
         self.voltage = voltage
         self.net1 = net1
