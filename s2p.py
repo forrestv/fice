@@ -21,6 +21,15 @@ def _y_box(Y, vs): # list of (vp, vn)
         for j in xrange(len(vs)):
             yield fice.VoltageControlledCurrentSource(lambda w, i=i, j=j: Y(w)[i,j], vs[i][0], vs[i][1], vs[j][0], vs[j][1])
 
+def memoize(f):
+    val = []
+    def _(*args):
+        if not val or val[0] != args:
+            res = f(*args)
+            val[:] = [args, res]
+        return val[1]
+    return _
+
 class S2P(object):
     @classmethod
     def from_file(cls, filename):
@@ -82,4 +91,4 @@ class S2P(object):
     
     def get_model(self, vs): # list of (vp, vn)
         assert len(vs) == 2
-        return _y_box(lambda w: _S_to_Y(self.get_S(w/2/math.pi), self._ref_impedance), vs)
+        return _y_box(memoize(lambda w: _S_to_Y(self.get_S(w/2/math.pi), self._ref_impedance)), vs)
