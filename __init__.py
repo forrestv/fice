@@ -53,7 +53,7 @@ class Capacitor(Impedor):
         self.capacitance = capacitance
         self.net1 = net1
         self.net2 = net2
-    def get_impedance(self, w): return 1/(1j * w * self.capacitance) if w else None
+    def get_impedance(self, w): return 1/(1j * w * self.capacitance) if w != 0 else None
 
 class Inductor(Impedor):
     def __init__(self, inductance, net1, net2):
