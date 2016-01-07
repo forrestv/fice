@@ -201,7 +201,7 @@ def do_noise(objects, w=0): # returns map var -> variance(var)
                 for nvar, dests in self._inner.get_noise_contributions(w).iteritems():
                     if nvar is noise_var:
                         for node, coeff in dests.iteritems():
-                            old = x.get(node, (0, 0))
+                            old = x.get(node, ({}, 0))
                             x[node] = old[0], old[1] + coeff
                 return x
         objects2 = map(Surrogate, objects)

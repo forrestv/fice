@@ -51,7 +51,7 @@ def noise(f, w, r):
     output_noise_added = fice.do_noise(objects, w)[ports[1].voltage]
     
     res = output_noise / (output_noise - output_noise_added)
-    print power_ratio_to_db(res)
+    #print power_ratio_to_db(res)
     
     return res
     
