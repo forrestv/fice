@@ -8,6 +8,19 @@ import numpy
 
 import fice
 
+
+def _S_to_Y(s, R):
+    N = s.shape[0]
+    assert s.shape == (N, N)
+    sy = numpy.eye(N) * math.sqrt(1/R)
+    return sy.dot(numpy.eye(N) - s).dot(numpy.linalg.inv(numpy.eye(N) + s)).dot(sy)
+
+def _y_box(Y, vs): # list of (vp, vn)
+    #assert Y(0).shape == (len(vs), len(vs))
+    for i in xrange(len(vs)):
+        for j in xrange(len(vs)):
+            yield fice.VoltageControlledCurrentSource(lambda w, i=i, j=j: Y(w)[i,j], vs[i][0], vs[i][1], vs[j][0], vs[j][1])
+
 class S2P(object):
     @classmethod
     def from_file(cls, filename):
@@ -23,7 +36,7 @@ class S2P(object):
             assert type_str == 'S'
             assert format_str in ['MA', 'RI']
             assert R_str == 'R'
-            assert float(Rn_str) == 50
+            ref_impedance = float(Rn_str)
             
             line = f.readline().strip()
             while not line or line[0] == '!': line = f.readline().strip() # skip comments
@@ -45,11 +58,12 @@ class S2P(object):
                 else: assert False
                 line = f.readline().strip()
                 if not line or line[0] == '!': break
-            return cls(res)
+            return cls(res, ref_impedance)
 
-    def __init__(self, freq_to_s):
+    def __init__(self, freq_to_s, ref_impedance):
         self._freq_to_s = freq_to_s
         self._freqs = sorted(list(freq_to_s))
+        self._ref_impedance = ref_impedance
     
     def get_frequencies(self):
         return self._freqs
@@ -62,19 +76,10 @@ class S2P(object):
         i = bisect.bisect_right(self._freqs, freq)
         assert i >= 1
         fl, fr = self._freqs[i-1], self._freqs[i]
-        x = (freq - fl)/(fr - fl)
         assert fl <= freq <= fr, (fl, freq, fr)
+        x = (freq - fl)/(fr - fl)
         return self._freq_to_s[fl] * (1-x) + self._freq_to_s[fr] * x
-
-def S_to_Y(s, R):
-        N = s.shape[0]
-        assert s.shape == (N, N)
-        sy = numpy.eye(N) * math.sqrt(1/R)
-        return sy.dot(numpy.eye(N) - s).dot(numpy.linalg.inv(numpy.eye(N) + s)).dot(sy)
-
-
-def y_box(Y, vs): # list of (vp, vn)
-    assert Y.shape == (len(vs), len(vs))
-    for i in xrange(len(vs)):
-        for j in xrange(len(vs)):
-            yield fice.VoltageControlledCurrentSource(Y[i,j], vs[i][0], vs[i][1], vs[j][0], vs[j][1])
+    
+    def get_model(self, vs): # list of (vp, vn)
+        assert len(vs) == 2
+        return _y_box(lambda w: _S_to_Y(self.get_S(w/2/math.pi), self._ref_impedance), vs)

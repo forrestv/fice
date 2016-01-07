@@ -101,9 +101,10 @@ class VoltageControlledCurrentSource(object):
         self.sense2 = sense2
     def get_current_contributions(self, w):
         # return list of (destination node, {net voltage coefficients}, constant)
+        g = self.gain(w)
         return {
-            self.net1.voltage: ({self.sense1.voltage: -self.gain, self.sense2.voltage: self.gain}, 0),
-            self.net2.voltage: ({self.sense1.voltage: self.gain, self.sense2.voltage: -self.gain}, 0),
+            self.net1.voltage: ({self.sense1.voltage: -g, self.sense2.voltage: g}, 0),
+            self.net2.voltage: ({self.sense1.voltage: g, self.sense2.voltage: -g}, 0),
         }
     def get_noise_contributions(self, w): return {}
 
