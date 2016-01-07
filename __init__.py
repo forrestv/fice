@@ -52,6 +52,7 @@ class Resistor(Impedor):
         self.temperature = temperature
     def get_impedance(self, w): return self.resistance
     def get_noise_contributions(self, w): # map from variables -> (map from nodes to injected current)
+        if self.resistance == 0: return {} # not a hack
         x = math.sqrt(4 * k_B * self.temperature / self.resistance)
         return {
             self._nv: {self.net1.voltage: x, self.net2.voltage: -x},
