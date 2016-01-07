@@ -5,6 +5,7 @@ import math
 
 import numpy
 
+k_B = 1.3806485279e-23
 
 class Variable(object):
     def __init__(self, name):
@@ -18,6 +19,8 @@ class Net(object):
         self.voltage = Variable((name, 'voltage'))
     def __repr__(self):
         return 'Net(%r)' % (self.name,)
+
+class IndependentComplexRandom(object): pass
 
 class Impedor(object):
     def __init__(self):
@@ -40,12 +43,19 @@ class Impedor(object):
         }
 
 class Resistor(Impedor):
-    def __init__(self, resistance, net1, net2):
+    def __init__(self, resistance, net1, net2, temperature=273):
         Impedor.__init__(self)
         self.resistance = resistance
         self.net1 = net1
         self.net2 = net2
+        self._nv = IndependentComplexRandom()
+        self.temperature = temperature
     def get_impedance(self, w): return self.resistance
+    def get_noise_contributions(self, w): # map from variables -> (map from nodes to injected current)
+        x = math.sqrt(4 * k_B * self.temperature / self.resistance)
+        return {
+            self._nv: {self.net1.voltage: x, self.net2.voltage: -x},
+        }
 
 class Capacitor(Impedor):
     def __init__(self, capacitance, net1, net2):
@@ -54,6 +64,7 @@ class Capacitor(Impedor):
         self.net1 = net1
         self.net2 = net2
     def get_impedance(self, w): return 1/(1j * w * self.capacitance) if w != 0 else None
+    def get_noise_contributions(self, w): return {}
 
 class Inductor(Impedor):
     def __init__(self, inductance, net1, net2):
@@ -62,6 +73,7 @@ class Inductor(Impedor):
         self.net1 = net1
         self.net2 = net2
     def get_impedance(self, w): return 1j * w * self.inductance
+    def get_noise_contributions(self, w): return {}
 
 class CurrentSource(object):
     # current source from net1 to net2
@@ -93,6 +105,7 @@ class VoltageControlledCurrentSource(object):
             self.net1.voltage: ({self.sense1.voltage: -self.gain, self.sense2.voltage: self.gain}, 0),
             self.net2.voltage: ({self.sense1.voltage: self.gain, self.sense2.voltage: -self.gain}, 0),
         }
+    def get_noise_contributions(self, w): return {}
 
 class VoltageSource(object):
     # makes V(net2) - V(net1) = voltage
@@ -109,6 +122,7 @@ class VoltageSource(object):
             self.net1.voltage: ({self._fake_current_var: -1}, 0),
             self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, -self.voltage(w)),
         }
+    def get_noise_contributions(self, w): return {}
 
 class TransmissionLine(object):
     def __init__(self, characteristic_impedance, attenuation_per_second, length_in_seconds, net1, gnd, net2):
@@ -138,6 +152,7 @@ class Ground(object):
         return {
             self.net.voltage: ({self.net.voltage: -1}, 0),
         }
+    def get_noise_contributions(self, w): return {}
 
 def add_dicts(a, b, add_func=lambda a, b: a + b):
     res = dict(a)
@@ -164,3 +179,32 @@ def do_nodal(objects, w=0):
     x = numpy.linalg.solve(A, b)
     
     return dict(zip(net_list, map(lambda a: complex(a.real, a.imag), x)))
+
+def do_noise(objects, w=0): # returns map var -> variance(var)
+    noise_vars = set()
+    
+    for obj in objects:
+        noise_vars.update(obj.get_noise_contributions(w).keys())
+    
+    res = {}
+    
+    for noise_var in noise_vars:
+        class Surrogate(object):
+            def __init__(self, inner):
+                self._inner = inner
+            def get_current_contributions(self, w2):
+                assert w2 is None
+                
+                x = {dest: (coeff, 0) for dest, (coeff, const) in self._inner.get_current_contributions(w).iteritems()}
+                for nvar, dests in self._inner.get_noise_contributions(w).iteritems():
+                    if nvar is noise_var:
+                        for node, coeff in dests.iteritems():
+                            old = x.get(node, (0, 0))
+                            x[node] = old[0], old[1] + coeff
+                return x
+        objects2 = map(Surrogate, objects)
+        res2 = do_nodal(objects2, None)
+        for k, v in res2.iteritems():
+            res[k] = res.get(k, 0) + (v.real*v.real + v.imag*v.imag)
+    
+    return res
