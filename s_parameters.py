@@ -34,7 +34,7 @@ def ana(f, w, r=[50, 50]): # r is list of reference impendances per port
     
     for drive_index in xrange(N):
         DRIVE_VOLTAGE = 1
-        objects, ports = _rig(f, r, [DRIVE_VOLTAGE if i == drive_index else 0 for i in xrange(N)], [273 for i in xrange(N)])
+        objects, ports = _rig(f, r, [DRIVE_VOLTAGE if i == drive_index else 0 for i in xrange(N)], [290 for i in xrange(N)])
         res = fice.do_nodal(objects, w)
         for sense_index in xrange(N):
             ret[sense_index][drive_index] = 2 * (res[ports[sense_index].voltage]/math.sqrt(r[sense_index])) / (DRIVE_VOLTAGE/math.sqrt(r[drive_index])) - (1 if sense_index == drive_index else 0)
@@ -44,7 +44,7 @@ def ana(f, w, r=[50, 50]): # r is list of reference impendances per port
 def noise(f, w, r):
     assert len(r) == 2
     
-    objects, ports = _rig(f, r, [0, 0], [273, 0])
+    objects, ports = _rig(f, r, [0, 0], [290, 0])
     output_noise = fice.do_noise(objects, w)[ports[1].voltage]
     
     objects, ports = _rig(f, r, [0, 0], [0, 0])

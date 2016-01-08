@@ -43,7 +43,7 @@ class Impedor(object):
         }
 
 class Resistor(Impedor):
-    def __init__(self, resistance, net1, net2, temperature=273):
+    def __init__(self, resistance, net1, net2, temperature=290):
         Impedor.__init__(self)
         self.resistance = resistance
         self.net1 = net1
@@ -53,7 +53,8 @@ class Resistor(Impedor):
     def get_impedance(self, w): return self.resistance
     def get_noise_contributions(self, w): # map from variables -> (map from nodes to injected current)
         if self.resistance == 0: return {} # not a hack
-        x = math.sqrt(4 * k_B * self.temperature / self.resistance)
+        Y = 1/self.resistance
+        x = math.sqrt(4 * k_B * self.temperature * Y.real)
         return {
             self._nv: {self.net1.voltage: x, self.net2.voltage: -x},
         }

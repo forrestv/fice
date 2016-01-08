@@ -97,6 +97,10 @@ class S2P(object):
         return self._noise_freqs
     
     def get_S(self, freq):
+        if self._freqs[0] * (1 - 1e-6) <= freq < self._freqs[0] * (1 + 1e-6):
+            freq = self._freqs[0] * (1 + 1e-6)
+        elif self._freqs[-1] * (1 - 1e-6) < freq <= self._freqs[-1] * (1 + 1e-6):
+            freq = self._freqs[-1] * (1 - 1e-6)
         i = bisect.bisect_right(self._freqs, freq)
         assert i >= 1
         fl, fr = self._freqs[i-1], self._freqs[i]
@@ -105,6 +109,10 @@ class S2P(object):
         return self._freq_to_s[fl] * (1-x) + self._freq_to_s[fr] * x
     
     def get_noise(self, freq):
+        if self._noise_freqs[0] * (1 - 1e-6) <= freq < self._noise_freqs[0] * (1 + 1e-6):
+            freq = self._noise_freqs[0] * (1 + 1e-6)
+        elif self._noise_freqs[-1] * (1 - 1e-6) < freq <= self._noise_freqs[-1] * (1 + 1e-6):
+            freq = self._noise_freqs[-1] * (1 - 1e-6)
         i = bisect.bisect_right(self._noise_freqs, freq)
         assert i >= 1
         fl, fr = self._noise_freqs[i-1], self._noise_freqs[i]
@@ -185,5 +193,5 @@ class VoltageNoiseSource(object):
         }
     def get_noise_contributions(self, w):
         return {
-            nv: {self._fake_current_var: -coeff}
+            nv: {self._fake_current_var: --coeff}
         for nv, coeff in self.voltage(w).iteritems()}
