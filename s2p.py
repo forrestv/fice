@@ -34,56 +34,71 @@ class S2P(object):
     @classmethod
     def from_file(cls, filename):
         # implemented according to http://cp.literature.agilent.com/litweb/pdf/genesys200801/sim/linear_sim/sparams/touchstone_file_format.htm
+        
         with open(filename) as f:
-            line = f.readline().strip()
-            
-            while not line or line[0] == '!': line = f.readline().strip() # skip comments
-            
-            assert line[0] == '#'; line = line[1:].strip()
-            freq_units_str, type_str, format_str, R_str, Rn_str = map(str.strip, line.split())
-            freq_multiplier = dict(GHZ=1e9, MHZ=1e6, KHZ=1e3, HZ=1)[freq_units_str.upper()]
-            assert type_str == 'S'
-            assert format_str in ['MA', 'RI']
-            assert R_str == 'R'
-            ref_impedance = float(Rn_str)
-            
-            line = f.readline().strip()
-            while not line or line[0] == '!': line = f.readline().strip() # skip comments
-            
-            res = {}
-            while True:
-                if format_str == 'MA':
-                    freq, s11m, s11a, s21m, s21a, s12m, s12a, s22m, s22a = map(float, line.strip().split())
-                    res[freq * freq_multiplier] = numpy.matrix([
-                        [cmath.rect(s11m, math.radians(s11a)), cmath.rect(s12m, math.radians(s12a))],
-                        [cmath.rect(s21m, math.radians(s21a)), cmath.rect(s22m, math.radians(s22a))],
-                    ])
-                elif format_str == 'RI':
-                    freq, s11r, s11i, s21r, s21i, s12r, s12i, s22r, s22i = map(float, line.strip().split())
-                    res[freq * freq_multiplier] = numpy.matrix([
-                        [complex(s11r, s11i), complex(s12r, s12i)],
-                        [complex(s21r, s21i), complex(s22r, s22i)],
-                    ])
-                else: assert False
-                line = f.readline().strip()
-                if not line or line[0] == '!': break
-            
-            line = f.readline().strip()
-            while not line or line[0] == '!': line = f.readline().strip() # skip comments
-            
-            noise = {}
-            while True:
-                freq, fmin, Gm, Ga, rn = map(float, line.split())
-                freq *= freq_multiplier
-                #print freq, fmin, Gm, Ga, rn
-                noise[freq] = 10**(fmin/10), cmath.rect(Gm, math.radians(Ga)), rn*ref_impedance
-                #print freq, noise[freq]
-                line = f.readline().strip()
-                if not line or line[0] == '!': break
-            
-            return cls(res, noise, ref_impedance)
+            lines = f.readlines()
+        lines = [line[:line.index('!')] if '!' in line else line for line in lines]
+        lines = map(str.strip, lines)
+        lines = [line for line in lines if line]
+        
+        line = lines[0]
+        assert line[0] == '#'; line = line[1:].strip()
+        freq_units_str, type_str, format_str, R_str, Rn_str = line.split()
+        freq_multiplier = dict(GHZ=1e9, MHZ=1e6, KHZ=1e3, HZ=1)[freq_units_str.upper()]
+        assert type_str == 'S'
+        parse_func = {
+            'DB': lambda m_db, a: cmath.rect(10**(m_db/20), math.radians(a)),
+            'MA': lambda m, a: cmath.rect(m, math.radians(a)),
+            'RI': lambda r, i: complex(r, i),
+        }[format_str]
+        assert R_str == 'R'
+        ref_impedance = float(Rn_str)
+        
+        lines = [map(float, line.split()) for line in lines[1:]]
+        
+        if len(lines[0]) == 3: ports = 1
+        elif len(lines[0]) == 7: ports = 3
+        elif len(lines[0]) == 9:
+            if len(lines[1]) == 9:
+                ports = 2
+            else:
+                total = 4
+                for line in lines[1:]:
+                    if len(line) % 2: break
+                    total += len(line) // 2
+                ports = int(round(math.sqrt(total)))
+                assert total == ports**2
+        else: assert False
+        
+        res = {}
+        noise = {}
+        if ports == 2:
+            while lines:
+                if len(lines[0]) != 9: break
+                x = map(parse_func, lines[0][1::2], lines[0][2::2])
+                res[lines[0][0] * freq_multiplier] = numpy.array([
+                    [x[0], x[2]],
+                    [x[1], x[3]],
+                ])
+                lines.pop(0)
+            while lines:
+                freq, fmin, Gm, Ga, rn = lines[0]
+                noise[freq * freq_multiplier] = 10**(fmin/10), cmath.rect(Gm, math.radians(Ga)), rn*ref_impedance
+                lines.pop(0)
+        else:
+            while lines:
+                freq = lines[0][0]
+                acc = [map(parse_func, lines[0][1::2], lines[0][2::2])]
+                lines.pop(0)
+                while lines and len(lines[0]) % 2 == 0:
+                    acc.extend([map(parse_func, lines[0][::2], lines[0][1::2])])
+                    lines.pop(0)
+                res[freq * freq_multiplier] = numpy.array(acc).reshape((ports, ports))
+        
+        return cls(ports, res, noise, ref_impedance)
 
-    def __init__(self, freq_to_s, freq_to_noise, ref_impedance):
+    def __init__(self, ports, freq_to_s, freq_to_noise, ref_impedance):
+        self._ports = ports
         self._freq_to_s = freq_to_s
         self._freqs = sorted(list(freq_to_s))
         self._freq_to_noise = freq_to_noise
@@ -148,11 +163,11 @@ class S2P(object):
         return dict(a=a, c=c, d=d) # i = a n1, e = c n1 + d n2
     
     def get_model(self, vs): # list of (vp, vn)
-        assert len(vs) == 2
+        assert len(vs) == self._ports
         return _y_box(memoize(lambda w: _S_to_Y(self.get_S(w/2/math.pi), self._ref_impedance)), vs)
     
     def get_noisy_model(self, vs):
-        assert len(vs) == 2
+        assert len(vs) == self._ports == 2
         
         n1 = fice.IndependentComplexRandom()
         n2 = fice.IndependentComplexRandom()
