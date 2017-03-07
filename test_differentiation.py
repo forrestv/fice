@@ -24,7 +24,7 @@ objs = [
     fice.Ground(gnd),
 ]
 
-res = fice.do_nodal(objs, w=1*2*math.pi, doing_differentiation=True)
+res = fice.do_nodal(objs, w=1*2*math.pi)
 objs[2]._Z_0 = 50
 objs[3]._Z_0 = 50
 res2 = fice.do_nodal(objs, w=1*2*math.pi)

@@ -168,7 +168,7 @@ def map_values(d, f):
 def scale_dict(d, k):
     return map_values(d, lambda x: k*x)
 
-def do_nodal(objects, w=0, doing_differentiation=False):
+def do_nodal(objects, w=0):
     equations = {}
     var_list = set()
     for obj in objects:
@@ -179,6 +179,7 @@ def do_nodal(objects, w=0, doing_differentiation=False):
     equations = list(equations.iteritems())
     net_list = [k for k, v in equations]
     
+    doing_differentiation = any(isinstance(const, D) or any(isinstance(x, D) for x in coeff.itervalues()) for dest, (coeff, const) in equations)
     if doing_differentiation:
         A = numpy.zeros((len(equations), len(equations)), dtype=complex)
         b = numpy.zeros((len(equations)), dtype=complex)
@@ -222,6 +223,10 @@ class D(object):
         return D(self._v+other._v, add_dicts(self._d, other._d))
     def __radd__(self, other):
         return self+other
+    def __sub__(self, other):
+        return self + (-1*other)
+    def __rsub__(self, other):
+        return (-1*self) + other
     def __mul__(self, other):
         if not isinstance(other, D): other = D(other, {})
         return D(self._v*other._v, add_dicts(scale_dict(self._d, other._v), scale_dict(other._d, self._v)))
@@ -245,6 +250,12 @@ class D(object):
     @classmethod
     def d(cls, x):
         return (cls(0, {})+x)._d
+    @property
+    def real(self):
+        return self.__class__(self._v.real, map_values(self._d, lambda x: x.real))
+    @property
+    def imag(self):
+        return self.__class__(self._v.imag, map_values(self._d, lambda x: x.imag))
 
 def do_noise(objects, w=0): # returns map var -> variance(var)
     noise_vars = set()
