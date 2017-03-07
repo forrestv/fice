@@ -2,6 +2,7 @@ from __future__ import division
 
 import cmath
 import math
+import collections
 
 import numpy
 
@@ -162,8 +163,12 @@ def add_dicts(a, b, add_func=lambda a, b: a + b):
     for k, v in b.iteritems():
         res[k] = add_func(res[k], v) if k in res else v
     return res
+def map_values(d, f):
+    return {k: f(v) for k, v in d.iteritems()}
+def scale_dict(d, k):
+    return map_values(d, lambda x: k*x)
 
-def do_nodal(objects, w=0):
+def do_nodal(objects, w=0, doing_differentiation=False):
     equations = {}
     var_list = set()
     for obj in objects:
@@ -173,15 +178,73 @@ def do_nodal(objects, w=0):
     
     equations = list(equations.iteritems())
     net_list = [k for k, v in equations]
-    A = numpy.zeros((len(equations), len(equations)), dtype=complex)
-    b = numpy.zeros((len(equations), 1), dtype=complex)
-    for dest, (coeff, const) in equations:
-        for k, v in coeff.iteritems():
-            A[net_list.index(dest), net_list.index(k)] = v
-        b[net_list.index(dest)] = -const
-    x = numpy.linalg.solve(A, b)
     
-    return dict(zip(net_list, map(lambda a: complex(a.real, a.imag), x)))
+    if doing_differentiation:
+        A = numpy.zeros((len(equations), len(equations)), dtype=complex)
+        b = numpy.zeros((len(equations)), dtype=complex)
+        A_d = collections.defaultdict(lambda: numpy.zeros((len(equations), len(equations)), dtype=complex))
+        b_d = collections.defaultdict(lambda: numpy.zeros((len(equations)), dtype=complex))
+        for dest, (coeff, const) in equations:
+            for k, v in coeff.iteritems():
+                A[net_list.index(dest), net_list.index(k)] = D.v(v)
+                for k2, v2 in D.d(v).iteritems():
+                    A_d[k2][net_list.index(dest), net_list.index(k)] = v2
+            b[net_list.index(dest)] = D.v(-const)
+            for k2, v2 in D.d(-const).iteritems():
+                b_d[k2][net_list.index(dest)] = v2
+        A_inv = numpy.linalg.inv(A)
+        x = list(A_inv.dot(b))
+        for k in set(A_d)|set(b_d):
+            A_inv_d = -A_inv.dot(A_d[k]).dot(A_inv)
+            x_d = A_inv_d.dot(b) + A_inv.dot(b_d[k])
+            x = [a+D(0, {k:v}) for a, v in zip(x, x_d)]
+    else:
+        A = numpy.zeros((len(equations), len(equations)), dtype=complex)
+        b = numpy.zeros((len(equations)), dtype=complex)
+        for dest, (coeff, const) in equations:
+            for k, v in coeff.iteritems():
+                A[net_list.index(dest), net_list.index(k)] = v
+            b[net_list.index(dest)] = -const
+        x = numpy.linalg.solve(A, b)
+    
+    return dict(zip(net_list, x))
+
+class D(object):
+    def __init__(self, value, dvalue):
+        assert isinstance(value, (int, float, complex, long))
+        assert isinstance(dvalue, dict)
+        assert all(isinstance(k, Variable) for k in dvalue)
+        assert all(isinstance(v, (int, float, complex, long)) for v in dvalue.itervalues())
+        self._v = value
+        self._d = dvalue
+    def __add__(self, other):
+        if not isinstance(other, D): other = D(other, {})
+        return D(self._v+other._v, add_dicts(self._d, other._d))
+    def __radd__(self, other):
+        return self+other
+    def __mul__(self, other):
+        if not isinstance(other, D): other = D(other, {})
+        return D(self._v*other._v, add_dicts(scale_dict(self._d, other._v), scale_dict(other._d, self._v)))
+    def __rmul__(self, other):
+        return self*other
+    def __truediv__(self, other):
+        if not isinstance(other, D): other = D(other, {})
+        return D(self._v/other._v, add_dicts(scale_dict(self._d, 1/other._v), scale_dict(other._d, -self._v/other._v**2)))
+    def __rtruediv__(self, other):
+        if not isinstance(other, D): other = D(other, {})
+        return other/self
+    def __lt__(self, other): assert False
+    def __le__(self, other): assert False
+    def __eq__(self, other): assert False
+    def __ne__(self, other): assert False
+    def __ge__(self, other): assert False
+    def __gt__(self, other): assert False
+    @classmethod
+    def v(cls, x):
+        return (cls(0, {})+x)._v
+    @classmethod
+    def d(cls, x):
+        return (cls(0, {})+x)._d
 
 def do_noise(objects, w=0): # returns map var -> variance(var)
     noise_vars = set()
