@@ -128,6 +128,13 @@ class VoltageSource(object):
         }
     def get_noise_contributions(self, w): return {}
 
+def exp(x):
+    if isinstance(x, D):
+        res = cmath.exp(x._v)
+        return D(res, scale_dict(x._d, res))
+    else:
+        return cmath.exp(x)
+
 class TransmissionLine(object):
     def __init__(self, characteristic_impedance, attenuation_per_second, length_in_seconds, net1, gnd, net2):
         self.net1 = net1
@@ -139,7 +146,7 @@ class TransmissionLine(object):
         self._attenuation_per_second = attenuation_per_second
         self._length_in_seconds = length_in_seconds
     def get_current_contributions(self, w):
-        k = math.exp(-self._attenuation_per_second(w) * self._length_in_seconds) * cmath.exp(-1j*w*self._length_in_seconds)
+        k = exp(-self._attenuation_per_second(w) * self._length_in_seconds) * exp(-1j*w*self._length_in_seconds)
         return {
             self.net1.voltage: ({self._wavel_var: 2/self._Z_0, self.net1.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
             self.net2.voltage: ({self._waver_var: 2/self._Z_0, self.net2.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
@@ -218,6 +225,8 @@ class D(object):
         assert all(isinstance(v, (int, float, complex, long)) for v in dvalue.itervalues())
         self._v = value
         self._d = dvalue
+    def __neg__(self):
+        return -1*self
     def __add__(self, other):
         if not isinstance(other, D): other = D(other, {})
         return D(self._v+other._v, add_dicts(self._d, other._d))
