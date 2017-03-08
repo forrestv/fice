@@ -238,12 +238,12 @@ class D(object):
     def __rtruediv__(self, other):
         if not isinstance(other, D): other = D(other, {})
         return other/self
-    def __lt__(self, other): assert False
-    def __le__(self, other): assert False
-    def __eq__(self, other): assert False
-    def __ne__(self, other): assert False
-    def __ge__(self, other): assert False
-    def __gt__(self, other): assert False
+    def __lt__(self, other): return self._v < other
+    def __le__(self, other): return self._v <= other
+    def __eq__(self, other): return self._v == other
+    def __ne__(self, other): return self._v != other
+    def __ge__(self, other): return self._v >= other
+    def __gt__(self, other): return self._v > other
     @classmethod
     def v(cls, x):
         return (cls(0, {})+x)._v
