@@ -155,6 +155,34 @@ class TransmissionLine(object):
             self._wavel_var: ({self._wavel_var: -1, self.net2.voltage: k, self.gnd.voltage: -k, self._waver_var: -k}, 0),
         }
 
+def CoupledTransmissionLine(even_impedance, odd_impedance, even_attenuation_per_second, odd_attenuation_per_second, even_length_in_seconds, odd_length_in_seconds):
+    '''
+    p1 -- p2
+    p4 -- p3
+    '''
+    from fice import s2p
+    Z_0 = math.sqrt(even_impedance * odd_impedance)
+    def get_S(w):
+        gamma_l_e = (even_attenuation_per_second(w) + 1j*w) * even_length_in_seconds
+        gamma_l_o = ( odd_attenuation_per_second(w) + 1j*w) *  odd_length_in_seconds
+        D_e = 2 * even_impedance * Z_0 * cmath.cosh(gamma_l_e) + (even_impedance**2 + Z_0**2) * cmath.sinh(gamma_l_e)
+        D_o = 2 *  odd_impedance * Z_0 * cmath.cosh(gamma_l_o) + ( odd_impedance**2 + Z_0**2) * cmath.sinh(gamma_l_o)
+        X_e = (even_impedance**2 - Z_0**2) * cmath.sinh(gamma_l_e) / (2 * D_e)
+        X_o = ( odd_impedance**2 - Z_0**2) * cmath.sinh(gamma_l_o) / (2 * D_o)
+        Y_e = even_impedance * Z_0 / D_e
+        Y_o =  odd_impedance * Z_0 / D_o
+        S = numpy.array([
+            [X_e+X_o, Y_e+Y_o, Y_e-Y_o, X_e-X_o],
+            [Y_e+Y_o, X_e+X_o, X_e-X_o, Y_e-Y_o],
+            [Y_e-Y_o, X_e-X_o, X_e+X_o, Y_e+Y_o],
+            [X_e-X_o, Y_e-Y_o, Y_e+Y_o, X_e+X_o],
+        ])
+        return S
+    def get_model(vs): # list of (vp, vn)
+        assert len(vs) == 4
+        return s2p._y_box(s2p.memoize(lambda w: s2p._S_to_Y(get_S(w), Z_0)), vs)
+    return get_model
+
 class Ground(object):
     # a 1 ohm resistor to 0 volt reference
     # DO NOT USE MULTIPLE IN ONE CIRCUIT
