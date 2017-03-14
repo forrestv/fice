@@ -135,6 +135,22 @@ def exp(x):
     else:
         return cmath.exp(x)
 
+def sqrt(x):
+    if isinstance(x, D):
+        res = math.sqrt(x._v)
+        return D(res, scale_dict(x._d, 1/(2*res)))
+    else:
+        return math.sqrt(x)
+
+def angle(x, deg=0):
+    fact = 180/math.pi if deg else 1
+    if isinstance(x, D):
+        res = cmath.phase(x._v)
+        denom = x._v.real**2 + x._v.imag**2
+        return D(res, map_values(x._d, lambda val: (-x._v.imag*val.real + x._v.real*val.imag)/denom)) * fact
+    else:
+        return cmath.phase(x) * fact    
+
 class TransmissionLine(object):
     def __init__(self, characteristic_impedance, attenuation_per_second, length_in_seconds, net1, gnd, net2):
         self.net1 = net1
@@ -275,6 +291,15 @@ class D(object):
     def __rtruediv__(self, other):
         if not isinstance(other, D): other = D(other, {})
         return other/self
+    def __pow__(self, other):
+        if not isinstance(other, D): other = D(other, {})
+        res = self._v ** other._v
+        return D(res, add_dicts(scale_dict(self._d, other._v/self._v*res), scale_dict(other._d, math.log(self._v)*res)))
+    def __rpow__(self, other):
+        if not isinstance(other, D): other = D(other, {})
+        return other ** self
+    def __mod__(self, other):
+        return self.__class__(self._v % other, self._d)
     def __lt__(self, other): return self._v < other
     def __le__(self, other): return self._v <= other
     def __eq__(self, other): return self._v == other
@@ -293,6 +318,14 @@ class D(object):
     @property
     def imag(self):
         return self.__class__(self._v.imag, map_values(self._d, lambda x: x.imag))
+    def conjugate(self):
+        return self.__class__(self._v.conjugate(), map_values(self._d, lambda x: x.conjugate()))    
+    def __abs__(self):
+        return sqrt((self * self.conjugate()).real)
+    def log10(self):
+        return self.__class__(math.log10(self._v), scale_dict(self._d, 1/self._v / math.log(10)))
+    def __repr__(self):
+        return self.__class__.__name__ + repr((self._v, self._d))
 
 def do_noise(objects, w=0): # returns map var -> variance(var)
     noise_vars = set()
