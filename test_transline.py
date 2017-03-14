@@ -11,6 +11,8 @@ v22 = fice.Net('v22')
 v3 = fice.Net('v3')
 gnd = fice.Net('gnd')
 
+c = 299792458
+
 objs = [
     fice.VoltageSource(lambda w: 1, gnd, v1),
     fice.Resistor(0, v1, v2),

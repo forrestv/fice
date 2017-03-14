@@ -138,10 +138,22 @@ class VoltageSource(object):
 
 def exp(x):
     if isinstance(x, D):
-        res = cmath.exp(x._v)
+        if isinstance(x._v, complex):
+            res = cmath.exp(x._v)
+        else:
+            res = math.exp(x._v)
         return D(res, scale_dict(x._d, res))
     else:
-        return cmath.exp(x)
+        if isinstance(x, complex):
+            return cmath.exp(x)
+        else:
+            return math.exp(x)
+cosh = lambda x: (exp(x)+exp(-x))/2
+sinh = lambda x: (exp(x)-exp(-x))/2
+tanh = lambda x: sinh(x)/cosh(x)
+coth = lambda x: cosh(x)/sinh(x)
+sech = lambda x: 1/cosh(x)
+csch = lambda x: 1/sinh(x)
 
 def sqrt(x):
     if isinstance(x, D):
@@ -170,19 +182,19 @@ class TransmissionLine(object):
         self.net1 = net1
         self.gnd = gnd
         self.net2 = net2
-        self._waver_var = Variable('_wave1_var')
-        self._wavel_var = Variable('_wave2_var')
+        self._waver_var = Variable('_waver_var')
+        self._wavel_var = Variable('_wavel_var')
         self._Z_0 = characteristic_impedance
         self._attenuation_per_second = attenuation_per_second
         self._length_in_seconds = length_in_seconds
     def get_current_contributions(self, w):
-        k = exp(-self._attenuation_per_second(w) * self._length_in_seconds) * exp(-1j*w*self._length_in_seconds)
+        k = exp(self._attenuation_per_second(w) * self._length_in_seconds) * exp(1j*w*self._length_in_seconds)
         return [
-            (self.net1.voltage, [(self._wavel_var, 2/self._Z_0), (self.net1.voltage, -1/self._Z_0), (self.gnd.voltage, 1/self._Z_0)], 0),
-            (self.net2.voltage, [(self._waver_var, 2/self._Z_0), (self.net2.voltage, -1/self._Z_0), (self.gnd.voltage, 1/self._Z_0)], 0),
-            (self.gnd.voltage, [(self._wavel_var, -2/self._Z_0), (self._waver_var, -2/self._Z_0), (self.net1.voltage, 1/self._Z_0), (self.net2.voltage, 1/self._Z_0), (self.gnd.voltage, -2/self._Z_0)], 0),
-            (self._waver_var, [(self._waver_var, -1), (self.net1.voltage, k), (self.gnd.voltage, -k), (self._wavel_var, -k)], 0),
-            (self._wavel_var, [(self._wavel_var, -1), (self.net2.voltage, k), (self.gnd.voltage, -k), (self._waver_var, -k)], 0),
+            (self.net1.voltage, [(self._wavel_var, 1), (self._waver_var, -1)], 0),
+            (self.net2.voltage, [(self._waver_var, 1/k), (self._wavel_var, -k)], 0),
+            (self.gnd.voltage, [(self._wavel_var, -1), (self._waver_var, 1), (self._waver_var, -1/k), (self._wavel_var, k)], 0),
+            (self._waver_var, [(self._waver_var, self._Z_0), (self.net1.voltage, -1), (self.gnd.voltage, 1), (self._wavel_var, self._Z_0)], 0),
+            (self._wavel_var, [(self._waver_var, self._Z_0/k), (self.net2.voltage, -1), (self.gnd.voltage, 1), (self._wavel_var, self._Z_0*k)], 0),
         ]
 
 def CoupledTransmissionLine(even_impedance, odd_impedance, even_attenuation_per_second, odd_attenuation_per_second, even_length_in_seconds, odd_length_in_seconds):
@@ -191,14 +203,14 @@ def CoupledTransmissionLine(even_impedance, odd_impedance, even_attenuation_per_
     p4 -- p3
     '''
     from fice import s2p
-    Z_0 = math.sqrt(even_impedance * odd_impedance)
+    Z_0 = 50 # sqrt(even_impedance * odd_impedance)
     def get_S(w):
         gamma_l_e = (even_attenuation_per_second(w) + 1j*w) * even_length_in_seconds
         gamma_l_o = ( odd_attenuation_per_second(w) + 1j*w) *  odd_length_in_seconds
-        D_e = 2 * even_impedance * Z_0 * cmath.cosh(gamma_l_e) + (even_impedance**2 + Z_0**2) * cmath.sinh(gamma_l_e)
-        D_o = 2 *  odd_impedance * Z_0 * cmath.cosh(gamma_l_o) + ( odd_impedance**2 + Z_0**2) * cmath.sinh(gamma_l_o)
-        X_e = (even_impedance**2 - Z_0**2) * cmath.sinh(gamma_l_e) / (2 * D_e)
-        X_o = ( odd_impedance**2 - Z_0**2) * cmath.sinh(gamma_l_o) / (2 * D_o)
+        D_e = 2 * even_impedance * Z_0 * cosh(gamma_l_e) + (even_impedance**2 + Z_0**2) * sinh(gamma_l_e)
+        D_o = 2 *  odd_impedance * Z_0 * cosh(gamma_l_o) + ( odd_impedance**2 + Z_0**2) * sinh(gamma_l_o)
+        X_e = (even_impedance**2 - Z_0**2) * sinh(gamma_l_e) / (2 * D_e)
+        X_o = ( odd_impedance**2 - Z_0**2) * sinh(gamma_l_o) / (2 * D_o)
         Y_e = even_impedance * Z_0 / D_e
         Y_o =  odd_impedance * Z_0 / D_o
         S = numpy.array([
@@ -212,6 +224,54 @@ def CoupledTransmissionLine(even_impedance, odd_impedance, even_attenuation_per_
         assert len(vs) == 4
         return s2p._y_box(s2p.memoize(lambda w: s2p._S_to_Y(get_S(w), Z_0)), vs)
     return get_model
+
+def MultiTransmissionLine(L_per_meter, C_per_meter, length_in_meters):
+    N = L_per_meter.shape[0]
+    assert L_per_meter.shape == (N, N)
+    assert C_per_meter.shape == (N, N)
+    
+    YZ = C_per_meter.dot(L_per_meter) # real is times -w^2
+    T = numpy.linalg.eig(YZ)[1] # T_I in text
+    Tsum = numpy.sum(T, axis=0)
+    Tinv = numpy.linalg.inv(T)
+    gamma = numpy.sqrt(numpy.diagonal(Tinv.dot(YZ).dot(T))) # real is times jw
+    assert numpy.allclose(YZ, T.dot(numpy.diag(gamma**2)).dot(Tinv))
+    Zc = L_per_meter.dot(T).dot(numpy.diag(1/gamma)).dot(Tinv) # 7.34d
+    assert numpy.allclose(Zc, numpy.linalg.inv(C_per_meter).dot(T).dot(numpy.diag(gamma)).dot(Tinv))
+    Zc_dot_T = Zc.dot(T)
+    class MultiTransmissionLineInstance(object):
+        def __init__(self, left_ref_net, left_nets, right_ref_net, right_nets):
+            assert len(left_nets) == N
+            assert len(right_nets) == N
+            self._left_ref_net = left_ref_net.voltage
+            self._left_nets = [x.voltage for x in left_nets]
+            self._right_ref_net = right_ref_net.voltage
+            self._right_nets = [x.voltage for x in right_nets]
+            self._waver_vars = [Variable('_waver_var%i'%i) for i in xrange(N)]
+            self._wavel_vars = [Variable('_wavel_var%i'%i) for i in xrange(N)]
+        def get_current_contributions(self, w):
+            # k = exp(gamma * z)
+            k = numpy.exp(gamma * (1j * w * length_in_meters))
+            
+            # waver = I+
+            # wavel = I-
+            
+            # left going currents; remember to negate I from that given in 7.86b
+            for i, Trow in enumerate(T):
+                yield self._left_nets[i], zip(self._waver_vars, -Trow) + zip(self._wavel_vars, Trow), 0
+            yield self._left_ref_net, zip(self._waver_vars, Tsum) + zip(self._wavel_vars, -Tsum), 0
+            
+            # right going currents
+            for i, Trow in enumerate(T):
+                yield self._right_nets[i], zip(self._waver_vars, Trow/k) + zip(self._wavel_vars, -Trow*k), 0
+            yield self._right_ref_net, zip(self._waver_vars, -Tsum/k) + zip(self._wavel_vars, Tsum*k), 0
+            
+            for i, (var, net, Zc_dot_T_row) in enumerate(zip(self._wavel_vars, self._left_nets, Zc_dot_T)):
+                yield var, zip(self._waver_vars, Zc_dot_T_row) + zip(self._wavel_vars, Zc_dot_T_row) + [(net, -1), (self._left_ref_net, 1)], 0
+            
+            for i, (var, net, Zc_dot_T_row) in enumerate(zip(self._waver_vars, self._right_nets, Zc_dot_T)):
+                yield var, zip(self._waver_vars, Zc_dot_T_row/k) + zip(self._wavel_vars, Zc_dot_T_row*k) + [(net, -1), (self._right_ref_net, 1)], 0
+    return MultiTransmissionLineInstance
 
 class Ground(object):
     # a 1 ohm resistor to 0 volt reference
@@ -233,6 +293,20 @@ def map_values(d, f):
 def scale_dict(d, k):
     return map_values(d, lambda x: k*x)
 
+def inv(A):
+    A_v = [[D.v(entry) for entry in row] for row in A]
+    A_d = collections.defaultdict(lambda: numpy.zeros(A.shape, dtype=A.dtype))
+    for i, row in enumerate(A):
+        for j, entry in enumerate(row):
+            for k, v in D.d(entry).iteritems():
+                A_d[k][i, j] = v
+    
+    A_inv = numpy.linalg.inv(A_v)
+    A_inv2 = A_inv.copy()
+    for k in A_d:
+        A_inv2 = A_inv2 + [[D(0, {k: entry}) for entry in row] for row in -A_inv.dot(A_d[k]).dot(A_inv)]
+    return A_inv2
+
 def do_nodal(objects, w=0):
     gnd, = [obj.net for obj in objects if isinstance(obj, Ground)]
     
@@ -240,6 +314,7 @@ def do_nodal(objects, w=0):
     var_list = set()
     for obj in objects:
         for dest, coeff, const in obj.get_current_contributions(w):
+            assert isinstance(dest, Variable), dest
             x = equations.get(dest, ({}, 0))
             equations[dest] = x[0], x[1] + const
             for k, v in coeff:
@@ -315,7 +390,10 @@ class D(object):
     def __pow__(self, other):
         if not isinstance(other, D): other = D(other, {})
         res = self._v ** other._v
-        return D(res, add_dicts(scale_dict(self._d, other._v/self._v*res), scale_dict(other._d, math.log(self._v)*res)))
+        res_d = scale_dict(self._d, self._v ** (other._v-1) * other._v)
+        if other._d:
+            res_d = add_dicts(res_d, scale_dict(other._d, math.log(self._v)*res))
+        return D(res, res_d)
     def __rpow__(self, other):
         if not isinstance(other, D): other = D(other, {})
         return other ** self

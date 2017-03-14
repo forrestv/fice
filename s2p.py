@@ -13,7 +13,7 @@ def _S_to_Y(s, R):
     N = s.shape[0]
     assert s.shape == (N, N)
     sy = numpy.eye(N) * math.sqrt(1/R)
-    return sy.dot(numpy.eye(N) - s).dot(numpy.linalg.inv(numpy.eye(N) + s)).dot(sy)
+    return sy.dot(numpy.eye(N) - s).dot(fice.inv(numpy.eye(N) + s)).dot(sy)
 
 def _Y_to_S(y, R):
     N = y.shape[0]

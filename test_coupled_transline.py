@@ -25,10 +25,28 @@ def f(gnd, p1, p2, p3, p4):
         (gnd, p4),
     ])
 
-ws = 2*math.pi*numpy.linspace(1e9, 19e9, 1000)
-Ses = [s_parameters.ana(f, w, [50]*4) for w in ws]
+c = 299792458
 
-for i in xrange(4):
-    for j in xrange(4):
-        pyplot.plot(ws/(2*math.pi), [10*math.log10(abs(S[i][j])**2) for S in Ses])
-pyplot.show()
+@util.chain(util.flatten)
+def f2(gnd, p1, p2, p3, p4):
+    ze, zo = 120.71, 20.71
+    c11, c12 = (zo + ze)/(2*c*zo*ze), (zo - ze)/(2*c*zo*ze)
+    C = numpy.array([[c11, c12], [c12, c11]])
+    L = numpy.linalg.inv(C)/c**2
+    yield fice.MultiTransmissionLine(L, C, 1/10e9/4 * c)(gnd, [p1, p4], gnd, [p2, p3])
+
+ws = 2*math.pi*numpy.linspace(1e9, 19e9, 1000)
+
+for w in ws:
+    assert numpy.allclose(
+        s_parameters.ana(f, w, [50]*4),
+        s_parameters.ana(f2, w, [50]*4),
+    )
+
+if 0:
+    Ses = [s_parameters.ana(f, w, [50]*4) for w in ws]
+    
+    for i in xrange(4):
+        for j in xrange(4):
+            pyplot.plot(ws/(2*math.pi), [10*math.log10(abs(S[i, j])**2) for S in Ses])
+    pyplot.show()
