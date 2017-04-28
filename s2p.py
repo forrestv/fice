@@ -15,6 +15,12 @@ def _S_to_Y(s, R):
     sy = numpy.eye(N) * math.sqrt(1/R)
     return sy.dot(numpy.eye(N) - s).dot(numpy.linalg.inv(numpy.eye(N) + s)).dot(sy)
 
+def _Y_to_S(y, R):
+    N = y.shape[0]
+    assert y.shape == (N, N)
+    sz = numpy.eye(N) * math.sqrt(R)
+    return (numpy.eye(N) - sz.dot(y).dot(sz)).dot(numpy.linalg.inv(numpy.eye(N) + sz.dot(y).dot(sz)))
+
 def _y_box(Y, vs): # list of (vp, vn)
     #assert Y(0).shape == (len(vs), len(vs))
     for i in xrange(len(vs)):

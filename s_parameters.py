@@ -27,12 +27,12 @@ def _rig(f, r, drive_voltages, r_temperatures):
     objects.extend(f(gnd, *ports))
     return objects, ports
 
-def ana(f, w, r=[50, 50]): # r is list of reference impendances per port
+def ana(f, w, r=[50, 50], drives=None): # r is list of reference impendances per port
     N = len(r)
     
-    ret = numpy.zeros((N, N), dtype=complex)
+    ret = numpy.full((N, N), numpy.nan, dtype=complex)
     
-    for drive_index in xrange(N):
+    for drive_index in (xrange(N) if drives is None else drives):
         DRIVE_VOLTAGE = 1
         objects, ports = _rig(f, r, [DRIVE_VOLTAGE if i == drive_index else 0 for i in xrange(N)], [290 for i in xrange(N)])
         res = fice.do_nodal(objects, w)
