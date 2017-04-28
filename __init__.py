@@ -43,6 +43,18 @@ class Impedor(object):
             self.net2.voltage: ({self.net2.voltage: -1/Z, self.net1.voltage: +1/Z}, 0),
         }
 
+class Admittor(object):
+    def __init__(self, admittance):
+        self.get_admittance = admittance
+    def get_current_contributions(self, w):
+        # return list of (destination node, {net voltage coefficients}, constant)
+        # convention is to return currents going into the node
+        Y = self.get_impedance(w)
+        return {
+            self.net1.voltage: ({self.net1.voltage: -Y, self.net2.voltage: +Y}, 0),
+            self.net2.voltage: ({self.net2.voltage: -Y, self.net1.voltage: +Y}, 0),
+        }
+
 class Resistor(Impedor):
     def __init__(self, resistance, net1, net2, temperature=290):
         Impedor.__init__(self)
@@ -141,6 +153,12 @@ def sqrt(x):
         return D(res, scale_dict(x._d, 1/(2*res)))
     else:
         return math.sqrt(x)
+
+def log10(x):
+    if isinstance(x, D):
+        return D(math.log10(x._v), scale_dict(x._d, 1/x._v / math.log(10)))
+    else:
+        return math.log10(x)
 
 def angle(x, deg=0):
     fact = 180/math.pi if deg else 1
@@ -247,8 +265,8 @@ def do_nodal(objects, w=0):
         A_inv = numpy.linalg.inv(A)
         x = list(A_inv.dot(b))
         for k in set(A_d)|set(b_d):
-            A_inv_d = -A_inv.dot(A_d[k]).dot(A_inv)
-            x_d = A_inv_d.dot(b) + A_inv.dot(b_d[k])
+            A_inv_d_b = -A_inv.dot(A_d[k].dot(A_inv.dot(b)))
+            x_d = A_inv_d_b + A_inv.dot(b_d[k])
             x = [a+D(0, {k:v}) for a, v in zip(x, x_d)]
     else:
         A = numpy.zeros((len(equations), len(equations)), dtype=complex)
@@ -263,6 +281,7 @@ def do_nodal(objects, w=0):
 
 class D(object):
     def __init__(self, value, dvalue):
+        # these asserts are a bit slow
         assert isinstance(value, (int, float, complex, long))
         assert isinstance(dvalue, dict)
         assert all(isinstance(k, Variable) for k in dvalue)
@@ -322,8 +341,6 @@ class D(object):
         return self.__class__(self._v.conjugate(), map_values(self._d, lambda x: x.conjugate()))    
     def __abs__(self):
         return sqrt((self * self.conjugate()).real)
-    def log10(self):
-        return self.__class__(math.log10(self._v), scale_dict(self._d, 1/self._v / math.log(10)))
     def __repr__(self):
         return self.__class__.__name__ + repr((self._v, self._d))
 

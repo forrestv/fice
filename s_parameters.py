@@ -18,7 +18,7 @@ def _rig(f, r, drive_voltages, r_temperatures):
     
     objects = []
     gnd = fice.Net('gnd'); objects.append(fice.Ground(gnd))
-    vs = [fice.Net('v%i') for i in xrange(N)]
+    vs = [fice.Net('v%i'%i) for i in xrange(N)]
     for i in xrange(N):
         objects.append(fice.VoltageSource(lambda w, i=i: drive_voltages[i], gnd, vs[i]))
     ports = [fice.Net('port%i' % i) for i in xrange(N)]
