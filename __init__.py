@@ -27,33 +27,31 @@ class Impedor(object):
     def __init__(self):
         self._current_when_short = Variable((self, '_current_when_short'))
     def get_current_contributions(self, w):
-        # return list of (destination node, {net voltage coefficients}, constant)
+        # return list of (destination node, [(variable, coefficient)], constant)
         # convention is to return currents going into the node
         Z = self.get_impedance(w)
         if Z == 0:
-            return {
-                self.net2.voltage: ({self._current_when_short: 1}, 0),
-                self.net1.voltage: ({self._current_when_short: -1}, 0),
-                self._current_when_short: ({self.net2.voltage: 1, self.net1.voltage: -1}, 0),
-            }
+            return [
+                (self.net2.voltage, [(self._current_when_short, 1)], 0),
+                (self.net1.voltage, [(self._current_when_short, -1)], 0),
+                (self._current_when_short, [(self.net2.voltage, 1), (self.net1.voltage, -1)], 0),
+            ]
         if Z is None: # inf
-            return {}
-        return {
-            self.net1.voltage: ({self.net1.voltage: -1/Z, self.net2.voltage: +1/Z}, 0),
-            self.net2.voltage: ({self.net2.voltage: -1/Z, self.net1.voltage: +1/Z}, 0),
-        }
+            return []
+        return [
+            (self.net1.voltage, [(self.net1.voltage, -1/Z), (self.net2.voltage, +1/Z)], 0),
+            (self.net2.voltage, [(self.net2.voltage, -1/Z), (self.net1.voltage, +1/Z)], 0),
+        ]
 
 class Admittor(object):
     def __init__(self, admittance):
         self.get_admittance = admittance
     def get_current_contributions(self, w):
-        # return list of (destination node, {net voltage coefficients}, constant)
-        # convention is to return currents going into the node
         Y = self.get_impedance(w)
-        return {
-            self.net1.voltage: ({self.net1.voltage: -Y, self.net2.voltage: +Y}, 0),
-            self.net2.voltage: ({self.net2.voltage: -Y, self.net1.voltage: +Y}, 0),
-        }
+        return [
+            (self.net1.voltage, [(self.net1.voltage, -Y), (self.net2.voltage, +Y)], 0),
+            (self.net2.voltage, [(self.net2.voltage, -Y), (self.net1.voltage, +Y)], 0),
+        ]
 
 class Resistor(Impedor):
     def __init__(self, resistance, net1, net2, temperature=290):
@@ -68,9 +66,9 @@ class Resistor(Impedor):
         if self.resistance == 0: return {} # not a hack
         Y = 1/self.resistance
         x = math.sqrt(4 * k_B * self.temperature * Y.real)
-        return {
-            self._nv: {self.net1.voltage: x, self.net2.voltage: -x},
-        }
+        return [
+            (self._nv, [(self.net1.voltage, x), (self.net2.voltage, -x)]),
+        ]
 
 class Capacitor(Impedor):
     def __init__(self, capacitance, net1, net2):
@@ -79,7 +77,7 @@ class Capacitor(Impedor):
         self.net1 = net1
         self.net2 = net2
     def get_impedance(self, w): return 1/(1j * w * self.capacitance) if w * self.capacitance != 0 else None
-    def get_noise_contributions(self, w): return {}
+    def get_noise_contributions(self, w): return []
 
 class Inductor(Impedor):
     def __init__(self, inductance, net1, net2):
@@ -88,7 +86,7 @@ class Inductor(Impedor):
         self.net1 = net1
         self.net2 = net2
     def get_impedance(self, w): return 1j * w * self.inductance
-    def get_noise_contributions(self, w): return {}
+    def get_noise_contributions(self, w): return []
 
 class CurrentSource(object):
     # current source from net1 to net2
@@ -99,12 +97,11 @@ class CurrentSource(object):
     def voltage(self, res):
         return res[self.net2.voltage] - res[self.net1.voltage]
     def get_current_contributions(self, w):
-        # return list of (destination node, {net voltage coefficients}, constant)
         c = self.current(w)
-        return {
-            self.net1.voltage: ({}, -c),
-            self.net2.voltage: ({}, c),
-        }
+        return [
+            (self.net1.voltage, [], -c),
+            (self.net2.voltage, [], c),
+        ]
 
 class VoltageControlledCurrentSource(object):
     # generates current from net1 to net2 equal to gain * (V(sense1) - V(sense2))
@@ -115,13 +112,12 @@ class VoltageControlledCurrentSource(object):
         self.sense1 = sense1
         self.sense2 = sense2
     def get_current_contributions(self, w):
-        # return list of (destination node, {net voltage coefficients}, constant)
         g = self.gain(w)
-        return {
-            self.net1.voltage: ({self.sense1.voltage: -g, self.sense2.voltage: g}, 0),
-            self.net2.voltage: ({self.sense1.voltage: g, self.sense2.voltage: -g}, 0),
-        }
-    def get_noise_contributions(self, w): return {}
+        return [
+            (self.net1.voltage, [(self.sense1.voltage, -g), (self.sense2.voltage, g)], 0),
+            (self.net2.voltage, [(self.sense1.voltage, g), (self.sense2.voltage, -g)], 0),
+        ]
+    def get_noise_contributions(self, w): return []
 
 class VoltageSource(object):
     # makes V(net2) - V(net1) = voltage
@@ -133,12 +129,12 @@ class VoltageSource(object):
     def current(self, res):
         return res[self._fake_current_var]
     def get_current_contributions(self, w):
-        return {
-            self.net2.voltage: ({self._fake_current_var: 1}, 0),
-            self.net1.voltage: ({self._fake_current_var: -1}, 0),
-            self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, -self.voltage(w)),
-        }
-    def get_noise_contributions(self, w): return {}
+        return [
+            (self.net2.voltage, [(self._fake_current_var, 1)], 0),
+            (self.net1.voltage, [(self._fake_current_var, -1)], 0),
+            (self._fake_current_var, [(self.net2.voltage, 1), (self.net1.voltage, -1)], -self.voltage(w)),
+        ]
+    def get_noise_contributions(self, w): return []
 
 def exp(x):
     if isinstance(x, D):
@@ -181,13 +177,13 @@ class TransmissionLine(object):
         self._length_in_seconds = length_in_seconds
     def get_current_contributions(self, w):
         k = exp(-self._attenuation_per_second(w) * self._length_in_seconds) * exp(-1j*w*self._length_in_seconds)
-        return {
-            self.net1.voltage: ({self._wavel_var: 2/self._Z_0, self.net1.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
-            self.net2.voltage: ({self._waver_var: 2/self._Z_0, self.net2.voltage: -1/self._Z_0, self.gnd.voltage: 1/self._Z_0}, 0),
-            self.gnd.voltage: ({self._wavel_var: -2/self._Z_0, self._waver_var: -2/self._Z_0, self.net1.voltage: 1/self._Z_0, self.net2.voltage: 1/self._Z_0, self.gnd.voltage: -2/self._Z_0}, 0),
-            self._waver_var: ({self._waver_var: -1, self.net1.voltage: k, self.gnd.voltage: -k, self._wavel_var: -k}, 0),
-            self._wavel_var: ({self._wavel_var: -1, self.net2.voltage: k, self.gnd.voltage: -k, self._waver_var: -k}, 0),
-        }
+        return [
+            (self.net1.voltage, [(self._wavel_var, 2/self._Z_0), (self.net1.voltage, -1/self._Z_0), (self.gnd.voltage, 1/self._Z_0)], 0),
+            (self.net2.voltage, [(self._waver_var, 2/self._Z_0), (self.net2.voltage, -1/self._Z_0), (self.gnd.voltage, 1/self._Z_0)], 0),
+            (self.gnd.voltage, [(self._wavel_var, -2/self._Z_0), (self._waver_var, -2/self._Z_0), (self.net1.voltage, 1/self._Z_0), (self.net2.voltage, 1/self._Z_0), (self.gnd.voltage, -2/self._Z_0)], 0),
+            (self._waver_var, [(self._waver_var, -1), (self.net1.voltage, k), (self.gnd.voltage, -k), (self._wavel_var, -k)], 0),
+            (self._wavel_var, [(self._wavel_var, -1), (self.net2.voltage, k), (self.gnd.voltage, -k), (self._waver_var, -k)], 0),
+        ]
 
 def CoupledTransmissionLine(even_impedance, odd_impedance, even_attenuation_per_second, odd_attenuation_per_second, even_length_in_seconds, odd_length_in_seconds):
     '''
@@ -222,10 +218,10 @@ class Ground(object):
     # DO NOT USE MULTIPLE IN ONE CIRCUIT
     def __init__(self, net): self.net = net
     def get_current_contributions(self, w):
-        return {
-            self.net.voltage: ({self.net.voltage: -1}, 0),
-        }
-    def get_noise_contributions(self, w): return {}
+        return [
+            (self.net.voltage, [(self.net.voltage, -1)], 0),
+        ]
+    def get_noise_contributions(self, w): return []
 
 def add_dicts(a, b, add_func=lambda a, b: a + b):
     res = dict(a)
@@ -238,12 +234,16 @@ def scale_dict(d, k):
     return map_values(d, lambda x: k*x)
 
 def do_nodal(objects, w=0):
+    gnd, = [obj.net for obj in objects if isinstance(obj, Ground)]
+    
     equations = {}
     var_list = set()
     for obj in objects:
-        for dest, (coeff, const) in obj.get_current_contributions(w).iteritems():
+        for dest, coeff, const in obj.get_current_contributions(w):
             x = equations.get(dest, ({}, 0))
-            equations[dest] = add_dicts(x[0], coeff), x[1] + const
+            equations[dest] = x[0], x[1] + const
+            for k, v in coeff:
+                x[0][k] = x[0].get(k, 0) + v
     
     equations = list(equations.iteritems())
     net_list = [k for k, v in equations]
@@ -277,7 +277,9 @@ def do_nodal(objects, w=0):
             b[net_list.index(dest)] = -const
         x = numpy.linalg.solve(A, b)
     
-    return dict(zip(net_list, x))
+    res = dict(zip(net_list, x))
+    assert abs(res[gnd.voltage]) < 1e-6
+    return res
 
 class D(object):
     def __init__(self, value, dvalue):
@@ -348,7 +350,7 @@ def do_noise(objects, w=0): # returns map var -> variance(var)
     noise_vars = set()
     
     for obj in objects:
-        noise_vars.update(obj.get_noise_contributions(w).keys())
+        noise_vars.update(nvar for nvar, dests in obj.get_noise_contributions(w))
     
     res = {}
     
@@ -359,14 +361,14 @@ def do_noise(objects, w=0): # returns map var -> variance(var)
             def get_current_contributions(self, w2):
                 assert w2 is None
                 
-                x = {dest: (coeff, 0) for dest, (coeff, const) in self._inner.get_current_contributions(w).iteritems()}
-                for nvar, dests in self._inner.get_noise_contributions(w).iteritems():
+                x = [(dest, coeff, 0) for dest, coeff, const in self._inner.get_current_contributions(w)]
+                for nvar, dests in self._inner.get_noise_contributions(w):
+                    assert isinstance(dests, list)
                     if nvar is noise_var:
-                        for node, coeff in dests.iteritems():
-                            old = x.get(node, ({}, 0))
-                            x[node] = old[0], old[1] + coeff
+                        for node, coeff in dests:
+                            x.append((node, [], coeff))
                 return x
-        objects2 = map(Surrogate, objects)
+        objects2 = map(lambda o: Surrogate(o) if not isinstance(o, Ground) else o, objects)
         res2 = do_nodal(objects2, None)
         for k, v in res2.iteritems():
             res[k] = res.get(k, 0) + (v.real*v.real + v.imag*v.imag)

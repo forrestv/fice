@@ -177,8 +177,8 @@ class S2P(object):
         tmp = fice.Net('tmp')
         res = []
         res.extend(self.get_model([(tmp, vs[0][1]), (vs[1][0], vs[1][1])]))
-        res.append(CurrentNoiseSource(lambda w: {n1: np(w)['a']                }, tmp, vs[0][1]))
-        res.append(VoltageNoiseSource(lambda w: {n1: np(w)['c'], n2: np(w)['d']}, tmp, vs[0][0]))
+        res.append(CurrentNoiseSource(lambda w: [(n1, np(w)['a'])                  ], tmp, vs[0][1]))
+        res.append(VoltageNoiseSource(lambda w: [(n1, np(w)['c']), (n2, np(w)['d'])], tmp, vs[0][0]))
         return res
 
 class CurrentNoiseSource(object):
@@ -187,11 +187,11 @@ class CurrentNoiseSource(object):
         self.current = current
         self.net1 = net1
         self.net2 = net2
-    def get_current_contributions(self, w): return {}
+    def get_current_contributions(self, w): return []
     def get_noise_contributions(self, w):
-        return {
-            nv: {self.net1.voltage: coeff, self.net2.voltage: -coeff}
-        for nv, coeff in self.current(w).iteritems()}
+        return [
+            (nv, [(self.net1.voltage, coeff), (self.net2.voltage, -coeff)])
+        for nv, coeff in self.current(w)]
 
 class VoltageNoiseSource(object):
     # makes V(net2) - V(net1) = voltage
@@ -201,12 +201,12 @@ class VoltageNoiseSource(object):
         self.net2 = net2
         self._fake_current_var = fice.Variable('_fake_current_var')
     def get_current_contributions(self, w):
-        return {
-            self.net2.voltage: ({self._fake_current_var: 1}, 0),
-            self.net1.voltage: ({self._fake_current_var: -1}, 0),
-            self._fake_current_var: ({self.net2.voltage: 1, self.net1.voltage: -1}, 0),
-        }
+        return [
+            (self.net2.voltage, [(self._fake_current_var, 1)], 0),
+            (self.net1.voltage, [(self._fake_current_var, -1)], 0),
+            (self._fake_current_var, [(self.net2.voltage, 1), (self.net1.voltage, -1)], 0),
+        ]
     def get_noise_contributions(self, w):
-        return {
-            nv: {self._fake_current_var: --coeff}
-        for nv, coeff in self.voltage(w).iteritems()}
+        return [
+            (nv, [(self._fake_current_var, --coeff)])
+        for nv, coeff in self.voltage(w)]
