@@ -27,7 +27,7 @@ def _rig(f, r, drive_voltages, r_temperatures):
     objects.extend(f(gnd, *ports))
     return objects, ports
 
-def ana(f, w, r=[50, 50], drives=None): # r is list of reference impendances per port
+def ana(f, w, r=[50, 50], drives=None, return_res=False): # r is list of reference impendances per port
     N = len(r)
     
     ret = numpy.full((N, N), numpy.nan, dtype=complex)
@@ -37,9 +37,9 @@ def ana(f, w, r=[50, 50], drives=None): # r is list of reference impendances per
         objects, ports = _rig(f, r, [DRIVE_VOLTAGE if i == drive_index else 0 for i in xrange(N)], [290 for i in xrange(N)])
         res = fice.do_nodal(objects, w)
         for sense_index in xrange(N):
-            ret[sense_index][drive_index] = 2 * (res[ports[sense_index].voltage]/math.sqrt(r[sense_index])) / (DRIVE_VOLTAGE/math.sqrt(r[drive_index])) - (1 if sense_index == drive_index else 0)
+            ret[sense_index][drive_index] = 2 * (res[ports[sense_index].voltage]/fice.sqrt(r[sense_index])) / (DRIVE_VOLTAGE/fice.sqrt(r[drive_index])) - (1 if sense_index == drive_index else 0)
     
-    return ret
+    return ret, res if return_res else ret
 
 def noise(f, w, r):
     assert len(r) == 2
