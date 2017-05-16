@@ -278,7 +278,7 @@ def do_nodal(objects, w=0):
         x = numpy.linalg.solve(A, b)
     
     res = dict(zip(net_list, x))
-    assert abs(res[gnd.voltage]) < 1e-6
+    assert (res[gnd.voltage]*res[gnd.voltage].conjugate()).real < 1e-12
     return res
 
 class D(object):
