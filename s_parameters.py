@@ -39,7 +39,7 @@ def ana(f, w, r=[50, 50], drives=None, return_res=False, dtype=complex): # r is 
         for sense_index in xrange(N):
             ret[sense_index][drive_index] = 2 * (res[ports[sense_index].voltage]/fice.sqrt(r[sense_index])) / (DRIVE_VOLTAGE/fice.sqrt(r[drive_index])) - (1 if sense_index == drive_index else 0)
     
-    return ret, res if return_res else ret
+    return (ret, res) if return_res else ret
 
 def noise(f, w, r):
     assert len(r) == 2
