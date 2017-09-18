@@ -294,6 +294,8 @@ def scale_dict(d, k):
     return map_values(d, lambda x: k*x)
 
 def inv(A):
+    A = numpy.array(A)
+    if A.dtype != numpy.dtype('O'): return numpy.linalg.inv(A)
     A_v = [[D.v(entry) for entry in row] for row in A]
     A_d = collections.defaultdict(lambda: numpy.zeros(A.shape, dtype=A.dtype))
     for i, row in enumerate(A):
