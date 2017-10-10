@@ -5,6 +5,8 @@ import math
 import numpy
 
 import fice
+import s2p
+from autoee import util
 
 def power_ratio_to_db(x):
     if x == 0:
@@ -43,11 +45,20 @@ def ana(f, w, r=[50, 50], drives=None, return_res=False, dtype=complex): # r is 
 
 def noise(f, w, r):
     assert len(r) == 2
-    
-    objects, ports = _rig(f, r, [0, 0], [290, 0])
+
+    @util.chain(util.flatten)
+    def modified_f(gnd, p1, p2, temp=290):
+        tmp = fice.Net('tmp')
+        tmp2 = fice.Net('tmp2')
+        yield f(gnd, p1, tmp)
+        Y = s2p._S_to_Y(numpy.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]]), r[1])
+        yield s2p._y_box(lambda w: Y, [(tmp, gnd), (p2, gnd), (tmp2, gnd)])
+        yield fice.Resistor(r[1], tmp2, gnd, temperature=temp)
+
+    objects, ports = _rig(lambda *args: modified_f(*args, temp=290), r, [0, 0], [290, 0])
     output_noise = fice.do_noise(objects, w)[ports[1].voltage]
     
-    objects, ports = _rig(f, r, [0, 0], [0, 0])
+    objects, ports = _rig(lambda *args: modified_f(*args, temp=290), r, [0, 0], [0, 0])
     output_noise_added = fice.do_noise(objects, w)[ports[1].voltage]
     
     res = output_noise / (output_noise - output_noise_added)
