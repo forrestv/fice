@@ -150,6 +150,10 @@ class S2P(object):
         Z = self._ref_impedance * (1 + Gamma)/(1 - Gamma)
         Y = 1/Z
         G_o, B_o = Y.real, Y.imag
+        min_R_n = (F_o-1)/4/G_o # otherwise, G_u is negative
+        if R_n < min_R_n:
+            print 'warning: pushing impossible noise parameters into valid region (R_n from %f to %f)' % (R_n, min_R_n)
+            R_n = min_R_n
         
         B_gamma = -B_o
         G_gamma = (F_o - 1)/2/R_n - G_o
@@ -164,7 +168,10 @@ class S2P(object):
         ieconjm = eiconjm.conjugate()
         a = math.sqrt(i2m)
         c = (ieconjm/a).conjugate()
-        d = math.sqrt(e2m - abs(c)**2)
+        if e2m - abs(c)**2 < 0: # should never be violated with perfect arithmetic due to above correction
+            d = 0
+        else:
+            d = math.sqrt(e2m - abs(c)**2)
         
         return dict(a=a, c=c, d=d) # i = a n1, e = c n1 + d n2
     
