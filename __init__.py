@@ -43,29 +43,23 @@ class Impedor(object):
             (self.net2.voltage, [(self.net2.voltage, -1/Z), (self.net1.voltage, +1/Z)], 0),
         ]
 
-class Admittor(object):
-    def __init__(self, admittance):
-        self.get_admittance = admittance
-    def get_current_contributions(self, w):
-        Y = self.get_impedance(w)
-        return [
-            (self.net1.voltage, [(self.net1.voltage, -Y), (self.net2.voltage, +Y)], 0),
-            (self.net2.voltage, [(self.net2.voltage, -Y), (self.net1.voltage, +Y)], 0),
-        ]
-
 class Resistor(Impedor):
-    def __init__(self, resistance, net1, net2, temperature=290):
+    def __init__(self, resistance, net1, net2, temperature=290, freq_dependent=False):
         Impedor.__init__(self)
         self.resistance = resistance
         self.net1 = net1
         self.net2 = net2
         self._nv = IndependentComplexRandom()
         self.temperature = temperature
-    def get_impedance(self, w): return self.resistance
+        self.freq_dependent = freq_dependent
+    def get_impedance(self, w):
+        return self.resistance if not self.freq_dependent else self.resistance(w)
     def get_noise_contributions(self, w): # map from variables -> (map from nodes to injected current)
-        if self.resistance == 0: return {} # not a hack
-        Y = 1/self.resistance
-        x = math.sqrt(4 * k_B * self.temperature * Y.real)
+        resistance = self.get_impedance(w)
+        if resistance == 0: return {} # not a hack
+        if resistance < 0: print "noise broken for negative resistances WARNING", resistance
+        Y = 1/resistance
+        x = math.sqrt(4 * k_B * self.temperature * abs(Y.real))
         return [
             (self._nv, [(self.net1.voltage, x), (self.net2.voltage, -x)]),
         ]
