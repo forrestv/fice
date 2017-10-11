@@ -171,7 +171,7 @@ class S2P(object):
     def get_model(self, vs): # list of (vp, vn)
         assert len(vs) == self._ports
         return _y_box(memoize(lambda w: _S_to_Y(self.get_S(w/2/math.pi), self._ref_impedance)), vs)
-    
+
     def get_noisy_model(self, vs):
         assert len(vs) == self._ports == 2
         
@@ -185,6 +185,17 @@ class S2P(object):
         res.extend(self.get_model([(tmp, vs[0][1]), (vs[1][0], vs[1][1])]))
         res.append(CurrentNoiseSource(lambda w: [(n1, np(w)['a'])                  ], tmp, vs[0][1]))
         res.append(VoltageNoiseSource(lambda w: [(n1, np(w)['c']), (n2, np(w)['d'])], tmp, vs[0][0]))
+        return res
+
+    def get_inferred_noisy_model(self, vs):
+        assert len(vs) == self._ports
+        assert vs[0][1] is vs[1][1]
+        Z = memoize(lambda w: numpy.linalg.inv(_S_to_Y(self.get_S(w/2/math.pi), self._ref_impedance)))
+        int_node = fice.Net('int')
+        res = []
+        res.append(fice.Resistor(lambda w: Z(w)[0,0]-Z(w)[0,1], vs[0][0], int_node, freq_dependent=True))
+        res.append(fice.Resistor(lambda w: Z(w)[1,1]-Z(w)[0,1], int_node, vs[1][0], freq_dependent=True))
+        res.append(fice.Resistor(lambda w: Z(w)[0,1], int_node, vs[0][1], freq_dependent=True))
         return res
 
 class CurrentNoiseSource(object):
