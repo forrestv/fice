@@ -33,15 +33,17 @@ def ana(f, w, r=[50, 50], drives=None, return_res=False, dtype=complex): # r is 
     N = len(r)
     
     ret = numpy.full((N, N), numpy.nan, dtype=dtype)
-    
+    ress = []
+
     for drive_index in (xrange(N) if drives is None else drives):
-        DRIVE_VOLTAGE = 1
+        DRIVE_VOLTAGE = 2
         objects, ports = _rig(f, r, [DRIVE_VOLTAGE if i == drive_index else 0 for i in xrange(N)], [290 for i in xrange(N)])
         res = fice.do_nodal(objects, w)
         for sense_index in xrange(N):
             ret[sense_index][drive_index] = 2 * (res[ports[sense_index].voltage]/fice.sqrt(r[sense_index])) / (DRIVE_VOLTAGE/fice.sqrt(r[drive_index])) - (1 if sense_index == drive_index else 0)
+        ress.append(res)
     
-    return (ret, res) if return_res else ret
+    return (ret, ress) if return_res else ret
 
 def noise(f, w, r):
     assert len(r) == 2
