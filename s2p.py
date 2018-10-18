@@ -18,7 +18,11 @@ def _S_to_Y(s, R):
 def _Y_to_S(y, R):
     N = y.shape[0]
     assert y.shape == (N, N)
-    sz = numpy.eye(N) * math.sqrt(R)
+    if numpy.isscalar(R):
+        sz = numpy.eye(N) * math.sqrt(R)
+    else:
+        assert len(R) == N
+        sz = numpy.diag(numpy.sqrt(R))
     return (numpy.eye(N) - sz.dot(y).dot(sz)).dot(numpy.linalg.inv(numpy.eye(N) + sz.dot(y).dot(sz)))
 
 def _y_box(Y, vs): # list of (vp, vn)
@@ -75,7 +79,7 @@ class S2P(object):
                 ports = int(round(math.sqrt(total)))
                 assert total == ports**2
         else: assert False
-        
+
         res = {}
         noise = {}
         if ports == 2:
@@ -94,10 +98,10 @@ class S2P(object):
         else:
             while lines:
                 freq = lines[0][0]
-                acc = [map(parse_func, lines[0][1::2], lines[0][2::2])]
+                acc = map(parse_func, lines[0][1::2], lines[0][2::2])
                 lines.pop(0)
                 while lines and len(lines[0]) % 2 == 0:
-                    acc.extend([map(parse_func, lines[0][::2], lines[0][1::2])])
+                    acc.extend(map(parse_func, lines[0][::2], lines[0][1::2]))
                     lines.pop(0)
                 res[freq * freq_multiplier] = numpy.array(acc).reshape((ports, ports))
         
@@ -204,6 +208,29 @@ class S2P(object):
         res.append(fice.Resistor(lambda w: Z(w)[1,1]-Z(w)[0,1], int_node, vs[1][0], freq_dependent=True))
         res.append(fice.Resistor(lambda w: Z(w)[0,1], int_node, vs[0][1], freq_dependent=True))
         return res
+
+    def write_to_file(self, filename):
+        # according to: https://ibis.org/connector/touchstone_spec11.pdf, but without noise
+        def format(mat):
+            if self._ports == 1:
+                return '{0} {1}\n'.format(mat[0,0].real, mat[0,0].imag)
+            elif self._ports == 2:
+                return '{0} {1} {2} {3} {4} {5} {6} {7}\n'.format(mat[0,0].real, mat[0,0].imag, mat[1,0].real, mat[1,0].imag,
+                                                                  mat[0,1].real, mat[0,1].imag, mat[1,1].real, mat[1,1].imag)
+            else:
+                ret = ''
+                for i in range(self._ports):
+                    for j in range(int(math.ceil(self._ports/4))):
+                        for s in mat[i,4*j:4*(j+1)]: ret += '{0} {1} '.format(s.real, s.imag)
+                        ret += '\n'
+                return ret
+
+        with open(filename, 'wb') as f:
+            f.write('# Hz S RI R 50\n')
+            for freq in self._freqs:
+                f.write('%f %s'%(freq, format(self._freq_to_s[freq])))
+
+
 
 class CurrentNoiseSource(object):
     # current goes from net1 to net2
