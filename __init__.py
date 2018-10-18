@@ -57,9 +57,9 @@ class Resistor(Impedor):
     def get_noise_contributions(self, w): # map from variables -> (map from nodes to injected current)
         resistance = self.get_impedance(w)
         if resistance == 0: return {} # not a hack
-        if resistance < 0: print "noise broken for negative resistances WARNING", resistance
+        #if resistance < 0: print "noise broken for negative resistances WARNING", resistance
         Y = 1/resistance
-        x = math.sqrt(4 * k_B * self.temperature * abs(Y.real))
+        x = math.sqrt(4 * k_B * self.temperature * Y.real) if Y.real > 0 else 0
         return [
             (self._nv, [(self.net1.voltage, x), (self.net2.voltage, -x)]),
         ]
@@ -190,6 +190,15 @@ class TransmissionLine(object):
             (self._waver_var, [(self._waver_var, self._Z_0), (self.net1.voltage, -1), (self.gnd.voltage, 1), (self._wavel_var, self._Z_0)], 0),
             (self._wavel_var, [(self._waver_var, self._Z_0/k), (self.net2.voltage, -1), (self.gnd.voltage, 1), (self._wavel_var, self._Z_0*k)], 0),
         ]
+
+class PowerMeter(object):
+    def __init__(self, net1, gnd, net2):
+        self.tl = TransmissionLine(1, lambda w: 0, 0, net1, gnd, net2)
+    def power(self, res):
+        r, l = abs(res[self.tl._waver_var])**2, abs(res[self.tl._wavel_var])**2
+        return r-l
+    def get_current_contributions(self, w):
+        return self.tl.get_current_contributions(w)
 
 def CoupledTransmissionLine(even_impedance, odd_impedance, even_attenuation_per_second, odd_attenuation_per_second, even_length_in_seconds, odd_length_in_seconds):
     '''
