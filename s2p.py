@@ -150,6 +150,7 @@ class S2P(object):
         )
     
     def get_noise2(self, freq):
+        # reference: google "two-port noise"
         F_o, Gamma, R_n = self.get_noise(freq)
         Z = self._ref_impedance * (1 + Gamma)/(1 - Gamma)
         Y = 1/Z
